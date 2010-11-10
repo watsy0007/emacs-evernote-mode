@@ -61,7 +61,7 @@ document is read "as is" to the Emacs buffer.
 
 An example of XHTML mode editing:
 
-<pre>
+{{{
    Emacs Buffer
    -----------------------------------
    <?xml version="1.0" encoding="UTF-8"?>
@@ -95,7 +95,7 @@ An example of XHTML mode editing:
    saving and reading the Evenote notes.<br clear="none"/>
    </en-note>
    -----------------------------------
-</pre>
+}}}
 
 The text mode is specialized in editing Evernote notes that only
 contain text content.
@@ -112,7 +112,7 @@ the buffer.
 
 An example of TEXT mode editing:
 
-<pre>
+{{{
    Emacs Buffer
    -----------------------------------
    Evernote notes are XML complying with ENML DTD
@@ -140,7 +140,7 @@ An example of TEXT mode editing:
    evernote-mode offers the two edit mode, XHTML mode and TEXT mode for
    saving and reading the Evenote notes.
    -----------------------------------
-</pre>
+}}}
 
 You can select the edit mode when you create a note or when you call
 evernote-change-edit-mode. The edit mode is recorded in the note when
