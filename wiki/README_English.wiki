@@ -161,21 +161,27 @@ mode.
 
 1. Install ruby scripts for using Evernote service.
 
+{{{
 cd evernote-mode/ruby
 ruby setup.rb
+}}}
 
 
 2. Copy evernote-mode.el to your load path.
 
+{{{
 cp evernote-mode.el <your load path>
+}}}
 
 
 3. Add the evernote-mode configuration to .emacs.
 
+{{{
 (add-to-list 'load-path "<your load path>")
 (require 'evernote-mode)
 (global-set-key "\C-ceo" 'evernote-open-note)
 (global-set-key "\C-cew" 'evernote-write-note)
+}}}
 
 
 4. Proxy settings
