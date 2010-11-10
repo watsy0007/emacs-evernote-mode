@@ -1,3 +1,4 @@
+#labels Featured
 ==Introduction==
 
 Emacs evernote modeはEvernoteのノートをemacsから直接参照、編集するための機能を提供します。現在このパッケージでは以下のコマンドを提供しています。
