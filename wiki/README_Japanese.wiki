@@ -5,29 +5,28 @@ Emacs evernote modeはEvernoteのノートをemacsから直接参照、編集す
 
 
   * evernote-open-note
-    * 既存のノートをemacsバッファに読み込みます.タグを指定してノートの絞込み検索が可能です.タグ・ノート名指定の際には、ミニバッファでの補完が行われます.
+    * 既存のノートをemacsバッファに読み込みます。また、タグを指定してノートの絞込み検索が可能です。タグ・ノート名指定の際には、ミニバッファでの補完が行われます。
 
   * evernote-save-note (default bound to \C-x\C-s)
-    * 編集したノートをEvernoteサービス上で上書き保存します.
+    * 編集したノートをEvernoteサービス上で上書き保存します。
 
   * evernote-write-note (default bound to \C-cee)
-    * emacsバッファを新規ノートとして保存します.保存時にはノートに付加するタグを指定できます.
+    * emacsバッファを新規ノートとして保存します。保存時にはノートに付加するタグを指定することができます.
 
   * evernote-edit-tags (default bound to \C-cet)
-    * ノートに付加するタグを変更します.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
+    * ノートに付加するタグを変更します。このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
 
   * evernote-change-edit-mode (default bound to \C-cee)
-    * ノートの編集モードを変更します.詳細は "Evernote note editformat" をn参照して下さい.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
+    * ノートの編集モードを変更します.詳細は "Evernote note editformat" を参照して下さい.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
 
   * evernote-rename-note (default bound to \C-cer)
-	  * ノートを名前を変更します.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
+    * ノートを名前を変更します。このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます。
 
   * evernote-delete-note (default bound to \C-ced)
-    * ノートを削除します.
+    * ノートを削除します。
 
 
-evernote-open-note, evernote-write-noteを実行すると、ノートが読み込ま
-れているバッファで evernote-modeマイナーモードが起動されます。
+evernote-open-note, evernote-write-noteを実行すると、ノートが読み込まれているバッファで evernote-modeマイナーモードが起動されます。
 
 
 以下のコマンドはevernote-modeマイナーモードでのみ有効です。
@@ -40,7 +39,7 @@ evernote-open-note, evernote-write-noteを実行すると、ノートが読み�
 
 ==Evernote note edit mode==
 
-EvernoteのノートはENML DTD(http://xml.evernote.com/pub/enml2.dtd)に準
+EvernoteのノートはENML DTD(http://xml.evernote.com/pub/enml2.dtd) に準
 拠するXML文書です。evernote-modeではこのXMLをemacsで保存、読み込みする
 為にXHTMLモードとTEXTモード2種類の編集モードを用意しています。
 
@@ -147,8 +146,10 @@ evernote-modeにはXML編集機能が備わっていないので、他のEvernot
 
 1. Evernoteサービス使用のために必要なRubyスクリプトをインストールします。
 
+{{{
 cd evernote-mode/ruby
 ruby setup.rb
+}}}
 
 
 2. evernote-mode.el をロードパスにコピーする
@@ -158,10 +159,12 @@ cp evernote-mode.el <your load path>
 
 3. evernote-mode設定を.emacs に追記
 
+{{{
 (add-to-list 'load-path "<your load path>")
 (require 'evernote-mode)
 (global-set-key "\C-ceo" 'evernote-open-note)
 (global-set-key "\C-cew" 'evernote-write-note)
+}}}
 
 
 4. proxy の設定
