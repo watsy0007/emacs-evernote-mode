@@ -10,6 +10,9 @@ Emacs evernote modeはEvernoteのノートをemacsから直接参照、編集す
   * evernote-save-note (default bound to \C-x\C-s)
     編集したノートをEvernoteサービス上で上書き保存します。
 
+  * evernote-create-note
+    ノートを新規作成します。
+
   * evernote-write-note (default bound to \C-cee)
     emacsバッファを新規ノートとして保存します。保存時にはノートに付加するタグを指定することができます.
 
@@ -164,6 +167,7 @@ cp evernote-mode.el <your load path>
 {{{
 (add-to-list 'load-path "<your load path>")
 (require 'evernote-mode)
+(global-set-key "\C-cec" 'evernote-create-note)
 (global-set-key "\C-ceo" 'evernote-open-note)
 (global-set-key "\C-cew" 'evernote-write-note)
 }}}
