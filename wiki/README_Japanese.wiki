@@ -20,7 +20,7 @@ Emacs evernote modeはEvernoteのノートをemacsから直接参照、編集す
     ノートに付加するタグを変更します。このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
 
   * evernote-change-edit-mode (default bound to \C-cee)
-    ノートの編集モードを変更します.詳細は "Evernote note editformat" を参照して下さい.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
+    ノートの編集モードを変更します.詳細は "Evernote note edit mode" を参照して下さい.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
 
   * evernote-rename-note (default bound to \C-cer)
     ノートを名前を変更します。このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます。
