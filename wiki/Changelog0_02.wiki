@@ -1,5 +1,3 @@
-#summary Changelog for emacs-evernote-mode 0.02
-
 == Changelog for emacs-evernote-mode 0.02 ==
 
 === *emacs-evernote-mode 0.02* (released 2010-11-11) ===
