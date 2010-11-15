@@ -20,7 +20,7 @@ Emacs evernote modeはEvernoteのノートをemacsから直接参照、編集す
     ノートに付加するタグを変更します。このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
 
   * evernote-change-edit-mode (default bound to \C-cee)
-    ノートの編集モードを変更します.詳細は "Evernote note edit mode" を参照して下さい.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
+    ノートの編集モードを変更します.詳細は [#Evernote_note_edit_mode] を参照して下さい.このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます.
 
   * evernote-rename-note (default bound to \C-cer)
     ノートを名前を変更します。このコマンド発行後にevernote-save-noteを実行することでEvernoteサービス上で変更が反映されます。
@@ -30,7 +30,7 @@ Emacs evernote modeはEvernoteのノートをemacsから直接参照、編集す
 
   * evernote-search-notes
     ミニバッファから入力されたクエリを使ってノートを検索します。
-    クエリの例は "Search Query Examples" を参照して下さい。
+    クエリの例は [#Search_Query_Examples] を参照して下さい。
 
   * evernote-do-saved-search
     Evernoteの「保存された検索」を使ってノートを検索します。
