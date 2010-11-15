@@ -176,14 +176,6 @@ http://www.evernote.com/about/developer/api/evernote-api.htm#_Toc277181479
   {{{any: "San Francisco" tag:SFO}}}
 
 
-  * Find image notes from the Sunnyvale region:
-  {{{resource:image/* latitude:37 -latitude:38 longitude:-123 -longitude:-122}}}
-
-
-  * Find untagged audio notes that I edited in the last week or two:
-  {{{-tag:* resource:audio/* updated:week-1}}}
-
-
 ==Installation & Settings==
 
 1. Evernoteサービス使用のために必要なRubyスクリプトをインストールします。
