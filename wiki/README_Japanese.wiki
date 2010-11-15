@@ -160,35 +160,28 @@ evernote-modeにはXML編集機能が備わっていないので、他のEvernot
 http://www.evernote.com/about/developer/api/evernote-api.htm#_Toc277181479
 からの引用です。
 
-* Find notes containing the word "chicken", tagged with "cooking", and created this year:
-
-  chicken tag:cooking created:year
-
-
-* Find notes tagged with "cooking" but not "mexican" that include the word "beef" but not the word "carrots"
-
-  tag:cooking -tag:mexican beef ?carrots
+  * Find notes containing the word "chicken", tagged with "cooking", and created this year:
+  {{{chicken tag:cooking created:year}}}
 
 
-* Find notes in my "Travel" notebook with San Francisco in the title:
-
-  notebook:Travel intitle:"San Francisco"
-
-
-* Find notes that either include the text "San Francisco" or are tagged with the "SFO" tag:
-
-  any: "San Francisco" tag:SFO
+  * Find notes tagged with "cooking" but not "mexican" that include the word "beef" but not the word "carrots"
+  {{{tag:cooking -tag:mexican beef -carrots}}}
 
 
-* Find image notes from the Sunnyvale region:
-
-  resource:image/* latitude:37 -latitude:38
-  longitude:-123 -longitude:-122
+  * Find notes in my "Travel" notebook with San Francisco in the title:
+  {{{notebook:Travel intitle:"San Francisco"}}}
 
 
-* Find untagged audio notes that I edited in the last week or two:
+  * Find notes that either include the text "San Francisco" or are tagged with the "SFO" tag:
+  {{{any: "San Francisco" tag:SFO}}}
 
-  -tag:* resource:audio/* updated:week-1
+
+  * Find image notes from the Sunnyvale region:
+  {{{resource:image/* latitude:37 -latitude:38 longitude:-123 -longitude:-122}}}
+
+
+  * Find untagged audio notes that I edited in the last week or two:
+  {{{-tag:* resource:audio/* updated:week-1}}}
 
 
 ==Installation & Settings==
