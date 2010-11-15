@@ -26,7 +26,7 @@ following commands.
   will be made after exec of evernote-save-note.
 
   * evernote-change-edit-mode (default bound to \C-cee)
-  Change the edit mode of the note. (See "Evernote note edit mode" for
+  Change the edit mode of the note. (See [#Evernote_note_edit_mode] for
   details) The change on Evernote service will be made after exec of
   evernote-save-note.
 
@@ -38,7 +38,7 @@ following commands.
   Delete the note.
 
   * evernote-search-notes
-  Search notes by query in the minibuffer. (See "Search Query Examples" for details)
+  Search notes by query in the minibuffer. (See [#Search_Query_Examples] for details)
 
   * evernote-do-saved-search
   Search notes by using a Saved Search.
