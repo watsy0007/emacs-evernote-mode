@@ -157,8 +157,7 @@ An example of TEXT mode editing:
 
 You can select the edit mode when you create a note or when you call
 evernote-change-edit-mode. The edit mode is recorded in the note when
-you save it, and the recorded edit mode is adapted when you reopen the
-note.
+you save it, and the recorded edit mode is applied to the note when you reopen it.
 Notes created by other Evernote applications are read as XHTML mode,
 but you can change the edit-mode by evernote-change-edit-mode.
 
