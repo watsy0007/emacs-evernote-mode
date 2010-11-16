@@ -2,6 +2,6 @@
 
 === *emacs-evernote-mode 0.11* (released 2010-11-17) ===
 
-  * support updating Saved Searches
+  * support editing Saved Searches
   * fix bugs of completion
   * improve appearance of note completions
