@@ -4,4 +4,4 @@
 
   * support editing Saved Searches
   * fix bugs of completion
-  * improve appearance of note completions
+  * improve appearance of note completion
