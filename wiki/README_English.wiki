@@ -173,6 +173,8 @@ mode.
 
 ==Search Query Examples==
 
+Here are examples of queries used for searching notes.
+
 The following examples are referred from
 (http://www.evernote.com/about/developer/api/evernote-api.htm#_Toc277181479).
 
