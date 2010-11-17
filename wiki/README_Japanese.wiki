@@ -159,23 +159,25 @@ evernote-modeにはXML編集機能が備わっていないので、他のEvernot
 
 ==Search Query Examples==
 
+ノートの検索に使用できるクエリの例を示します。
+
 以下の例は
 http://www.evernote.com/about/developer/api/evernote-api.htm#_Toc277181479
 からの引用です。
 
-  * Find notes containing the word "chicken", tagged with "cooking", and created this year:
+  * 今年に作られたノートで、"chicken" を含み、かつ "cooking" タグが付加されたものを検索します:
   {{{chicken tag:cooking created:year}}}
 
 
-  * Find notes tagged with "cooking" but not "mexican" that include the word "beef" but not the word "carrots"
+  * "cooking" タグを含み、かつ "mexican" タグを含まないノート中で、 "beef" を含み "carrots" を含まないものを検索します:
   {{{tag:cooking -tag:mexican beef -carrots}}}
 
 
-  * Find notes in my "Travel" notebook with San Francisco in the title:
+  * "Travel" ノートブック中のノートで、タイトルに"San Francisco"を含むものを検索します:
   {{{notebook:Travel intitle:"San Francisco"}}}
 
 
-  * Find notes that either include the text "San Francisco" or are tagged with the "SFO" tag:
+  * "San Francisco" と含むノート、もしくは "SFO" タグを付加されたノートを検索します:
   {{{any: "San Francisco" tag:SFO}}}
 
 
