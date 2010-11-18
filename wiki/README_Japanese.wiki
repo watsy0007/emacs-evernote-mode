@@ -169,7 +169,7 @@ http://www.evernote.com/about/developer/api/evernote-api.htm#_Toc277181479
   {{{chicken tag:cooking created:year}}}
 
 
-  * "cooking" タグを含み、かつ "mexican" タグを含まないノート中で、 "beef" を含み "carrots" を含まないものを検索します:
+  * "cooking" タグを含み、かつ "mexican" タグを含まないノートの中で、 "beef" を含み "carrots" を含まないものを検索します:
   {{{tag:cooking -tag:mexican beef -carrots}}}
 
 
