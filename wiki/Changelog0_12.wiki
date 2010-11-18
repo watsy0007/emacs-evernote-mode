@@ -8,6 +8,6 @@
 
 (In Japanese)
 
-  * ノートをオープン、作成、リネームする際にノートの名前に基づきmajor-modeを選択するように変更しました。
+  * ノートをオープン、作成、リネームする際に、ノートの名前に基づきmajor-modeを選択するように変更しました。
     * auto-mode-alistを参照してモードを選択します。magic-mode-alistは未サポートです。
   * evernote mode を有効にしたまま major mode を変更出来るようにしました。
