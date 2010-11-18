@@ -3,7 +3,3 @@
 === *emacs-evernote-mode 0.13* (released 2010-11-19) ===
 
   * bug fix of v0.12
-
-(In Japanese)
-
-  * v0.12のバグフィックス
