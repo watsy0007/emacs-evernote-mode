@@ -13,6 +13,9 @@ Emacs evernote modeはEvernoteのノートをemacsから直接参照、編集す
   * evernote-create-note
     ノートを新規作成します。
 
+  * evernote-post-region
+    選択されたリージョンを新規ノートとしてポストします。引数なしで実行した場合、evernote-open-noteやevernote-create-noteと異なり、新規ノートに対応するバッファは作成しませんが、\C-u等で引数を与えた場合（デフォルト引数以外を与えた場合）は、新規ノートに対応するバッファを作成し、引き続きバッファ上での編集作業を行うことができます。
+
   * evernote-write-note (default bound to \C-cee)
     emacsバッファを新規ノートとして保存します。保存時にはノートに付加するタグを指定することができます.
 
@@ -208,6 +211,7 @@ cp evernote-mode.el <your load path>
 (global-set-key "\C-ces" 'evernote-search-notes)
 (global-set-key "\C-ceS" 'evernote-do-saved-search)
 (global-set-key "\C-cew" 'evernote-write-note)
+(global-set-key "\C-cep" 'evernote-post-region)
 }}}
 
 
