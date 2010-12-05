@@ -202,7 +202,7 @@ The following examples are referred from
 
 ==Evernote Browser==
 
-Evernote Browser offers the features to open notes from the tag hierarchical list, the saved search list, and the note list of the past search result. These lists are different from the completion lists of evernote-open-note command or the evernote-search-notes command. These lists of Evernote Browser are always kept in Emacs buffers until they are deleted after they were created, and they make the procedure to open notes easy by using these list repeatedly. 
+Evernote Browser offers the features to open notes from the tag hierarchical list, the saved search list, and the note list of the past search result. These lists are different from the completion lists of evernote-open-note command or the evernote-search-notes command. These lists of Evernote Browser are always kept in Emacs buffers by the user until they are deleted after they were created, and they make the procedure to open notes easy by using these list repeatedly. 
 
 Evernote Browser is composed of multiple Evernote Browser pages(emacs buffers). An Evernote Browser page is created when searching notes or when executing the evernote-browser command at the state that no search has been executed.
 The multiple pages are managed as the page list. There is one valid current page and each page has the next/previous page. Execute the evernote-browser command to move the cursor to the current Evernote Browser page. Also, use the keys for moving to the next/previous page key (described later) to move to another page.
