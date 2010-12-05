@@ -214,11 +214,11 @@ There are three type of Evernote Browser page
   * saved search list page
   * note list page
 
-A tag list page shows the hierarchical tag list created on Evernote service. Pressing [Enter](\C-m) on the tag name opens a note list page of the tag.
+A tag list page shows the hierarchical tag list created on Evernote service. Pressing Enter(\C-m) on the tag name opens a note list page of the tag.
 
-A saved search list shows the search list created on Evernote service. Pressing [Enter](\C-m) on the search name opens a note list page from the search result.
+A saved search list shows the search list created on Evernote service. Pressing Enter(\C-m) on the search name opens a note list page from the search result.
 
-A note list shows the note list from a note search result. The note list page is newly created by the evenote-open-note command, the evernote-search-notes command and by searches on Evernote Browser.  Pressing [Enter](\C-m) on the note name opens a note.
+A note list shows the note list from a note search result. The note list page is newly created by the evenote-open-note command, the evernote-search-notes command and by searches on Evernote Browser.  Pressing Enter(\C-m) on the note name opens a note.
 
 
 The followings are other key assignments on Evernote Browser pages
@@ -228,7 +228,7 @@ The followings are other key assignments on Evernote Browser pages
 || t || create a tag list page and show it. If a tag list page already exists, move the cursor to the page ||
 || S || create a search list page and show it. If a tag list page already exists, move the cursor to the page ||
 || s || create a note list from the search query input and show it ||
-|| o || same as [Enter](\C-m), but it does not move the cursor to the opened note ||
+|| o || same as Enter(\C-m), but it does not move the cursor to the opened note ||
 || d || delete the current from Evernote Browser ||
 
 
