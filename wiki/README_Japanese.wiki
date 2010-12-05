@@ -190,7 +190,7 @@ http://www.evernote.com/about/developer/api/evernote-api.htm#_Toc277181479
 
 ==Evernote Browser==
 
-Evernote Browser はタグ一覧や、保存された検索の一覧、過去に検索したノートの一覧からノートを開くための機能を提供します。これらの一覧はevernote-open-note コマンドや evernote-search-notes コマンドで補完に使われるノート一覧と異なり、作成された一覧が削除されるまでバッファ上に保持されます。この一覧は繰り返し使用することができるため、ノートを開く手順を簡略化することができます。
+Evernote Browser はタグ一覧や、保存された検索の一覧、過去に検索したノートの一覧からノートを開くための機能を提供します。これらの一覧はevernote-open-note コマンドや evernote-search-notes コマンドで補完に使われるノート一覧と異なり、ユーザにより削除されるまでバッファ上に保持されます。この一覧は繰り返し使用することができるため、ノートを開く手順を簡略化することができます。
 
 Evernote Browser は複数の Evernote Browser ページ(バッファ)から構成されます。Evernote Browserページは、ノートの検索を行った際、もしくは検索を一度も行っていない状態で evernote-browser コマンドを実行した際に作られます。複数のページはリストとして管理され、現在有効なカレントページと各ページ間の前後関係が存在します。Evernote Browser のカレントページに
 移動するにはevernote-browser コマンドを実行して下さい。また、ページの移動には後述するページ移動キーを使用して下さい。
