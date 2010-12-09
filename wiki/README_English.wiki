@@ -1,4 +1,6 @@
 #labels Featured
+http://emacs-evernote-mode.googlecode.com/svn/branches/0_21/doc/readme_en.html
+
 ==Introduction==
 
 Emacs evernote mode offers functions to refer and edit
