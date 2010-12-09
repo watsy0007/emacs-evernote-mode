@@ -3,7 +3,7 @@
 === *emacs-evernote-mode 0.21* (released 2010-12-09) ===
 
   * support: formatting documents when reading documents created by applications other than emacs-evernote-mode, or when reading documents of XHTML mode.
-    - Installing w3m and additional emacs-evernote-mode settings are required to validate this feature.  See <a href="http://emacs-evernote-mode.googlecode.com/svn/branches/0_21/doc/readme_en.html">Readme</a> for details
+    - Installing w3m and additional emacs-evernote-mode settings are required to support this feature.  See <a href="http://emacs-evernote-mode.googlecode.com/svn/branches/0_21/doc/readme_en.html">Readme</a> for details
 
 (In Japanese)
 
