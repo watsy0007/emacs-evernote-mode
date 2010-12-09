@@ -1,5 +1,5 @@
 #labels Featured
-<a href="https://emacs-evernote-mode.googlecode.com/branches/0_21/doc/readme_ja.html">readme</a>
+<a href="https://emacs-evernote-mode.googlecode.com/svn/branches/0_21/doc/readme_ja.html">readme</a>
 
 ==Introduction==
 
