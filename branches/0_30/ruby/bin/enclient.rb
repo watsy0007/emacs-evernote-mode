@@ -1,4 +1,4 @@
-#! /usr/bin/ruby -sWKu
+#! D:/Ruby191/bin/ruby.exe -sWKu
 # -*- coding: utf-8 -*-
 
 #
@@ -52,17 +52,16 @@ module EnClient
           when :field_type_string_array
             "#{varsym}=#{varval.join "|"}"
           when :field_type_base64
-            "#{varsym}=#{Utils.encode_base64 varval}"
+            "#{varsym}=#{Formatter.encode_base64 varval}"
           when :field_type_base64_array
-            b64list = Utils.encode_base64_list varval
+            b64list = Formatter.encode_base64_list varval
             "#{varsym}=#{b64list.join "|"}"
           else
             raise IllegalStateException.new("illegal field type #{ftype}")
           end
-        else
-          "#{varsym}=#{varval}" # for nil
         end
       end
+      fields.delete nil
       fields.join ","
     end
 
@@ -93,9 +92,9 @@ module EnClient
             when :field_type_string_array
               varval_str.split "|"
             when :field_type_base64
-              Utils.decode_base64 varval_str
+              Formatter.decode_base64 varval_str
             when :field_type_base64_array
-              Utils.decode_base64_list varval_str.split("|")
+              Formatter.decode_base64_list varval_str.split("|")
             else
               raise IllegalStateException.new("illegal field type #{vartype} for #{varsym}")
             end
@@ -108,7 +107,7 @@ module EnClient
 
     def to_sexp
       str = "("
-      class_name = Utils.remove_package_names self.class.name
+      class_name = Formatter.remove_package_names self.class.name
       str += "(class . #{class_name})"
       serialized_fields.each do |varsym, vartype|
         varval = send varsym
@@ -136,14 +135,14 @@ module EnClient
             end
             str += "))"
           when :field_type_base64
-            #str += %|(#{varsym} . "#{Utils.encode_base64 varval}")|
-            str += %|(#{varsym} . "#{Utils.sexp_string_escape varval}")|
+            #str += %|(#{varsym} . "#{Formatter.encode_base64 varval}")|
+            str += %|(#{varsym} . "#{Formatter.sexp_string_escape varval}")|
           when :field_type_base64_array
             str += "(#{varsym} . ("
             varval.each do |elem|
-              #str += %|"#{Utils.encode_base64 elem}"|
+              #str += %|"#{Formatter.encode_base64 elem}"|
               # str += " "
-              str += %|"#{Utils.sexp_string_escape elem}"|
+              str += %|"#{Formatter.sexp_string_escape elem}"|
                 str += " "
             end
             str += "))"
@@ -233,8 +232,8 @@ module EnClient
   APPLICATION_NAME_TEXT  = %|emacs-enclient {:version => 0.30, :editmode => "TEXT"}|
   APPLICATION_NAME_XHTML = %|emacs-enclient {:version => 0.30, :editmode => "XHTML"}|
 
-  EVERNOTE_HOST       = "sandbox.evernote.com"
-  #EVERNOTE_HOST       = "www.evernote.com"
+  #EVERNOTE_HOST       = "sandbox.evernote.com"
+  EVERNOTE_HOST       = "www.evernote.com"
   USER_STORE_URL      = "https://#{EVERNOTE_HOST}/edam/user"
   NOTE_STORE_URL_BASE = "http://#{EVERNOTE_HOST}/edam/note/"
 
@@ -244,7 +243,7 @@ module EnClient
   ERROR_CODE_UNEXPECTED = 101
   ERROR_CODE_NOT_AUTHED = 102
 
-  LOG = Logger.new '/home/kawakami/enclient.log', 5
+  LOG = Logger.new File.expand_path("~/.evernote-mode.log"), 5
   #LOG = Logger.new $stdout
   LOG.level = Logger::DEBUG
 
@@ -289,8 +288,38 @@ module EnClient
   end
 
 
+  class TaskQueue
+    def initialize
+      @cond = ConditionVariable.new
+      @mutex = Mutex.new
+      @queue = []
+    end
+
+    def push(task)
+      @mutex.synchronize{
+        @queue.push task
+        @cond.signal if @queue.size == 1
+      }
+    end
+
+    def push_to_front(task)
+      @mutex.synchronize{
+        @queue.unshift task
+        @cond.signal if @queue.size == 1
+      }
+    end
+
+    def pop
+      @mutex.synchronize{
+        @cond.wait(@mutex) if @queue.size == 0
+        task = @queue.shift
+      }
+    end
+  end
+
+
   class Command
-    attr_accessor :sm, :dm, :tm, :shell
+    attr_accessor :command_id, :sm, :dm, :tm, :shell
 
     def self.create_from_hash(hash)
       unless hash.has_key? :class
@@ -312,25 +341,46 @@ module EnClient
       command
     end
 
+    def exec
+      exec_impl
+    rescue
+      reply = ErrorReply.new
+      reply.command_id = @command_id
+      ErrorUtils.set_reply_error $!, reply
+      LOG.warn reply.message
+      LOG.warn $!.backtrace
+      @shell.reply self, reply
+    end
+
     private
 
-    def server_task(&block)
-      task = Task.new &block
-      @tm.put task
+    #
+    # Utilities for subclasses
+    #
+
+    def server_task(ordered = false, &block)
+      task = Task.new do
+        begin
+          yield
+        rescue
+          reply = ErrorReply.new
+          reply.command_id = @command_id
+          ErrorUtils.set_reply_error $!, reply
+          LOG.warn reply.message
+          LOG.warn $!.backtrace
+          @shell.reply self, reply
+        end
+      end
+      @tm.put task, !ordered
     end
 
-    def check_auth(reply_class)
-      begin
-        @sm.auth_token # check authentication
-        return true
-      rescue
-        reply = reply_class.new
-        ErrorUtils.set_reply_error $!, reply
-        LOG.warn reply.message
-        @shell.reply reply
-        return false
-      end
+    def check_auth
+      @sm.auth_token # check authentication
     end
+
+    #
+    # Private helpers
+    #
 
     def self.get_command(name)
       all_commands =
@@ -351,7 +401,7 @@ module EnClient
          UpdateSearchCommand]
 
       command_class = all_commands.find do |elem|
-        Utils.remove_package_names(elem.name) == name
+        Formatter.remove_package_names(elem.name) == name
       end
       if command_class
         command_class.new
@@ -363,20 +413,42 @@ module EnClient
   class AuthCommand < Command
     attr_accessor :user, :passwd
 
-    def exec
+    def exec_impl
+      Formatter.to_ascii @user, @passwd
+
       server_task do
-        begin
-          sm.authenticate @user, @passwd
-          LOG.info "Auth successed: auth_token = '#{sm.auth_token}', shared_id = '#{sm.shared_id}'"
-          shell.reply AuthReply.new
-          tm.put SyncTask.new(sm, dm, tm)
-        rescue
-          reply = AuthReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
+        sm.authenticate @user, @passwd
+        LOG.info "Auth successed: auth_token = '#{sm.auth_token}', shared_id = '#{sm.shared_id}'"
+        tm.put SyncTask.new(sm, dm, tm)
+        server_task true do # defer reply until first sync will be done.
+          shell.reply self, AuthReply.new
         end
       end
+    end
+  end
+
+
+  module FormatNoteOperation
+    private
+
+    NOTE_DEFAULT_HEADER = %|<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd"><en-note>|
+    NOTE_DEFAULT_FOOTER = %|</en-note>|
+
+    def set_attribute_and_format_content!(note)
+      note.attributes = Evernote::EDAM::Type::NoteAttributes.new
+      if note.editMode == "TEXT"
+        note.content = to_xhtml note.content if note.content
+        note.attributes.sourceApplication = APPLICATION_NAME_TEXT
+      elsif note.editMode == "XHTML"
+        note.attributes.sourceApplication = APPLICATION_NAME_XHTML
+      end
+    end
+
+    def to_xhtml(content)
+      content = CGI.escapeHTML content
+      content.gsub! %r| |, %|&nbsp;|
+        content.gsub! %r|\n|, %|<br clear="none"/>|
+        content = NOTE_DEFAULT_HEADER + content + NOTE_DEFAULT_FOOTER
     end
   end
 
@@ -384,38 +456,37 @@ module EnClient
   class CreateNoteCommand < Command
     attr_accessor :title, :tag_names, :edit_mode, :content
 
-    def exec
+    include FormatNoteOperation
+
+    def exec_impl
+      Formatter.to_ascii @title, *@tag_names, @content
+
       note = Evernote::EDAM::Type::Note.new
       note.title = @title
       note.tagNames = @tag_names
+      note.editMode = @edit_mode
       note.content = @content
-      note.attributes = Evernote::EDAM::Type::NoteAttributes.new
-      if @edit_mode == "TEXT"
-        note.content = Utils.to_xhtml note.content if note.content
-        note.attributes.sourceApplication = APPLICATION_NAME_TEXT
-      elsif @edit_mode == "XHTML"
-        note.attributes.sourceApplication = APPLICATION_NAME_XHTML
-      end
+      set_attribute_and_format_content! note
 
       server_task do
-        begin
-          result_note = sm.note_store.createNote sm.auth_token, note
-          result_note.editMode = @edit_mode
-          dm.transaction do
-            dm.open_note do |db|
-              db[result_note.guid] = result_note.serialize
+        result_note = sm.note_store.createNote sm.auth_token, note
+        result_note.editMode = @edit_mode
+        result_note.content = note.content
+        DBUtils.set_note_and_content dm, result_note
+
+        if result_note.tagGuids
+          result_note.tagGuids.each do |guid|
+            unless DBUtils.exist_tag_in_cache? dm, guid
+              tags = sm.note_store.listTags sm.auth_token
+              DBUtils.sync_updated_tags dm, tags
+              break
             end
-            dm.set_note_content result_note.guid, note.content
           end
-          reply = CreateNoteReply.new
-          reply.note = result_note
-          shell.reply reply
-        rescue
-          reply = CreateNoteReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
         end
+
+        reply = CreateNoteReply.new
+        reply.note = result_note
+        shell.reply self, reply
       end
     end
   end
@@ -424,54 +495,48 @@ module EnClient
   class UpdateNoteCommand < Command
     attr_accessor :guid, :title, :tag_names, :content, :edit_mode
 
-    def exec
-      old_note = Evernote::EDAM::Type::Note.new
-      dm.transaction do
-        dm.open_note do |db|
-          old_note.deserialize db[@guid]
-        end
-      end
+    include FormatNoteOperation
+
+    def exec_impl
+      Formatter.to_ascii @title, *@tag_names, @content
+
+      old_note = DBUtils.get_note dm, @guid
 
       note = Evernote::EDAM::Type::Note.new
       note.guid = @guid
-      if note.title
+      if @title
         note.title = @title
       else
         note.title = old_note.title
       end
       note.tagNames = @tag_names
+      if @edit_mode
+        note.editMode = @edit_mode
+      else
+        note.editMode = old_note.editMode
+      end
       note.content = @content
-
-      unless @edit_mode
-        @edit_mode = old_note.editMode
-      end
-      note.attributes = Evernote::EDAM::Type::NoteAttributes.new
-      if @edit_mode == "TEXT"
-        note.content = Utils.to_xhtml note.content if note.content
-        note.attributes.sourceApplication = APPLICATION_NAME_TEXT
-      elsif @edit_mode == "XHTML"
-        note.attributes.sourceApplication = APPLICATION_NAME_XHTML
-      end
+      set_attribute_and_format_content! note
 
       server_task do
-        begin
-          result_note = sm.note_store.updateNote sm.auth_token, note
-          result_note.editMode = edit_mode
-          dm.transaction do
-            dm.open_note do |db|
-              db[result_note.guid] = result_note.serialize
+        result_note = sm.note_store.updateNote sm.auth_token, note
+        result_note.editMode = note.editMode
+        result_note.content = note.content
+        DBUtils.set_note_and_content dm, result_note
+        reply = UpdateNoteReply.new
+
+        if result_note.tagGuids
+          result_note.tagGuids.each do |guid|
+            unless DBUtils.exist_tag_in_cache? dm, guid
+              tags = sm.note_store.listTags sm.auth_token
+              DBUtils.sync_updated_tags dm, tags
+              break
             end
-            dm.set_note_content result_note.guid, note.content
           end
-          reply = UpdateNoteReply.new
-          reply.note = result_note
-          shell.reply reply
-        rescue
-          reply = UpdateNoteReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
         end
+
+        reply.note = result_note
+        shell.reply self, reply
       end
     end
   end
@@ -480,28 +545,14 @@ module EnClient
   class DeleteNoteCommand < Command
     attr_accessor :guid
 
-    def exec
+    def exec_impl
       server_task do
-        begin
-          usn = sm.note_store.deleteNote sm.auth_token, @guid
-          dm.transaction do
-            dm.open_note do |db|
-              if db.has_key? @guid
-                note = Evernote::EDAM::Type::Note.new
-                note.deserialize db[@guid]
-                note.updateSequenceNum = usn
-                note.active = false
-                db[@guid] = note.serialize
-              end
-            end
-          end
-          shell.reply DeleteNoteReply.new
-        rescue
-          reply = DeleteNoteReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
-        end
+        usn = sm.note_store.deleteNote sm.auth_token, @guid
+        note = DBUtils.get_note dm, @guid
+        note.updateSequenceNum = usn
+        note.active = false
+        DBUtils.set_note_and_content dm, note
+        shell.reply self, DeleteNoteReply.new
       end
     end
   end
@@ -510,28 +561,19 @@ module EnClient
   class CreateTagCommand < Command
     attr_accessor :name, :parent_guid
 
-    def exec
+    def exec_impl
+      Formatter.to_ascii @name
+
       tag = Evernote::EDAM::Type::Tag.new
       tag.name = @name
       tag.parentGuid = @parent_guid
 
       server_task do
-        begin
-          result_tag = sm.note_store.createTag sm.auth_token, tag
-          dm.transaction do
-            dm.open_tag do |db|
-              db[result_tag.guid] = result_tag.serialize
-            end
-          end
-          reply = CreateTagReply.new
-          reply.tag = result_tag
-          shell.reply reply
-        rescue
-          reply = CreateTagReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
-        end
+        result_tag = sm.note_store.createTag sm.auth_token, tag
+        DBUtils.set_tag dm, result_tag
+        reply = CreateTagReply.new
+        reply.tag = result_tag
+        shell.reply self, reply
       end
     end
   end
@@ -540,29 +582,20 @@ module EnClient
   class UpdateTagCommand < Command
     attr_accessor :guid, :name, :parent_guid
 
-    def exec
+    def exec_impl
+      Formatter.to_ascii @name
+
       tag = Evernote::EDAM::Type::Tag.new
       tag.guid = @guid
       tag.name = @name
       tag.parentGuid = @parent_guid
 
       server_task do
-        begin
-          usn = sm.note_store.updateTag sm.auth_token, tag
-          tag.updateSequenceNum = usn
-          dm.transaction do
-            dm.open_tag do |db|
-              db[tag.guid] = tag.serialize
-            end
-          end
-          reply = UpdateTagReply.new
-          shell.reply reply
-        rescue
-          reply = UpdateTagReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
-        end
+        usn = sm.note_store.updateTag sm.auth_token, tag
+        tag.updateSequenceNum = usn
+        DBUtils.set_tag dm, tag
+        reply = UpdateTagReply.new
+        shell.reply self, reply
       end
     end
   end
@@ -571,28 +604,19 @@ module EnClient
   class CreateSearchCommand < Command
     attr_accessor :name, :query
 
-    def exec
+    def exec_impl
+      Formatter.to_ascii @name
+
       search = Evernote::EDAM::Type::SavedSearch.new
       search.name = @name
       search.query = @query
 
       server_task do
-        begin
-          result_search = sm.note_store.createSearch sm.auth_token, search
-          dm.transaction do
-            dm.open_search do |db|
-              db[result_search.guid] = result_search.serialize
-            end
-          end
-          reply = CreateSearchReply.new
-          reply.search = result_search
-          shell.reply reply
-        rescue
-          reply = CreateSearchReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
-        end
+        result_search = sm.note_store.createSearch sm.auth_token, search
+        DBUtils.set_search dm, result_search
+        reply = CreateSearchReply.new
+        reply.search = result_search
+        shell.reply self, reply
       end
     end
   end
@@ -601,29 +625,20 @@ module EnClient
   class UpdateSearchCommand < Command
     attr_accessor :guid, :name, :query
 
-    def exec
+    def exec_impl
+      Formatter.to_ascii @name, @query
+
       search = Evernote::EDAM::Type::SavedSearch.new
       search.guid = @guid
       search.name = @name
       search.query = @query
 
       server_task do
-        begin
-          usn = sm.note_store.updateSearch sm.auth_token, search
-          search.updateSequenceNum = usn
-          dm.transaction do
-            dm.open_search do |db|
-              db[search.guid] = search.serialize
-            end
-          end
-          reply = UpdateSearchReply.new
-          shell.reply reply
-        rescue
-          reply = UpdateSearchReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
-        end
+        usn = sm.note_store.updateSearch sm.auth_token, search
+        search.updateSequenceNum = usn
+        DBUtils.set_search dm, search
+        reply = UpdateSearchReply.new
+        shell.reply self, reply
       end
     end
   end
@@ -632,26 +647,19 @@ module EnClient
   class SearchNoteCommand < Command
     attr_accessor :query
 
-    def exec
+    def exec_impl
+      Formatter.to_ascii @query
+
       filter = Evernote::EDAM::NoteStore::NoteFilter.new
       filter.order = Evernote::EDAM::Type::NoteSortOrder::UPDATED
       filter.words = @query
 
       server_task do
-        begin
-          notelist = sm.note_store.findNotes sm.auth_token, filter, 0, Evernote::EDAM::Limits::EDAM_USER_NOTES_MAX
-          reply = SearchNoteReply.new
-          reply.notes = notelist.notes
-          reply.notes.each do |note|
-            note.editMode = Utils.get_edit_mode note.attributes.sourceApplication
-          end
-          shell.reply reply
-        rescue
-          reply = SearchNoteReply.new
-          ErrorUtils.set_reply_error $!, reply
-          LOG.warn reply.message
-          shell.reply reply
-        end
+        notelist = sm.note_store.findNotes sm.auth_token, filter, 0, Evernote::EDAM::Limits::EDAM_USER_NOTES_MAX
+        DBUtils.sync_updated_notes dm, sm, tm, notelist.notes
+        reply = SearchNoteReply.new
+        reply.notes = notelist.notes
+        shell.reply self, reply
       end
     end
   end
@@ -660,22 +668,23 @@ module EnClient
   class GetNoteCommand < Command
     attr_accessor :guid
 
-    def exec
-      return unless check_auth GetNoteReply
-      reply = nil
-      dm.transaction do
-        dm.open_note do |db|
-          if db.has_key? @guid
-            reply = GetNoteReply.new
-            n = Evernote::EDAM::Type::Note.new
-            n.deserialize db[@guid]
-            reply.note = n
-          else
-            reply = GetNoteReply.new ERROR_CODE_NOT_FOUND, "note #{@guid} is not found"
-          end
+    def exec_impl
+      check_auth
+      note = DBUtils.get_note dm, @guid
+      if note
+        reply = GetNoteReply.new
+        reply.note = note
+        shell.reply self, reply
+      else
+        server_task do
+          note = sm.note_store.getNote sm.auth_token, @guid, true, false, false, false
+          note.editMode = Formatter.get_edit_mode note.attributes.sourceApplication
+          DBUtils.set_note_and_content dm, noote
+          reply = GetNoteReply.new
+          reply.note = note
+          shell.reply self, reply
         end
       end
-      shell.reply reply
     end
   end
 
@@ -683,32 +692,21 @@ module EnClient
   class GetContentCommand < Command
     attr_accessor :guid, :edit_mode
 
-    def exec
-      return unless check_auth GetContentReply
-      content = nil
-      dm.transaction do
-        content = dm.get_note_content @guid
-      end
+    def exec_impl
+      check_auth
+      content = DBUtils.get_content dm, @guid
       if content
         reply = GetContentReply.new
         reply.content = format_content content, @edit_mode
-        shell.reply reply
+        shell.reply self, reply
       else
         server_task do
-          begin
-            content = sm.note_store.getNoteContent sm.auth_token, @guid
-            dm.transaction do
-              dm.set_note_content @guid, content
-            end
-            reply = GetContentReply.new
-            reply.content = format_content content, @edit_mode
-            shell.reply reply
-          rescue
-            reply = GetContentReply.new
-            ErrorUtils.set_reply_error $!, reply
-            LOG.warn reply.message
-            shell.reply reply
-          end
+          note = sm.note_store.getNote sm.auth_token, @guid, true, false, false, false # with content
+          note.editMode = Formatter.get_edit_mode note.attributes.sourceApplication
+          DBUtils.set_note_and_content dm, note
+          reply = GetContentReply.new
+          reply.content = format_content note.content, @edit_mode
+          shell.reply self, reply
         end
       end
     end
@@ -726,27 +724,46 @@ module EnClient
       else
         result = content
       end
-      Utils.sexp_string_escape result
+      Formatter.sexp_string_escape result
     end
   end
 
 
   class ListNotebookCommand < Command
-    def exec
-      return unless check_auth ListNotebookReply
-      notebooks = []
-      dm.transaction do
-        dm.open_notebook do |db|
-          db.each_value do |value|
-            nb = Evernote::EDAM::Type::Notebook.new
-            nb.deserialize value
-            notebooks << nb
-          end
-        end
+    @@issued_before = false
+
+    def exec_impl
+      check_auth
+      if dm.during_full_sync? && !@@issued_before
+        get_result_from_server
+      else
+        get_result_from_local_cache
+      end
+    end
+
+    private
+
+    def get_result_from_local_cache
+      LOG.debug "return notebooks from cache"
+      notebooks = DBUtils.get_all_notebooks dm
+      notebooks.sort! do |a, b|
+        a.name <=> b.name
       end
       reply = ListNotebookReply.new
       reply.notebooks = notebooks
-      shell.reply reply
+      shell.reply self, reply
+    end
+
+    def get_result_from_server
+      server_task do
+        LOG.debug "return notebooks from server"
+        notebooks = sm.note_store.listNotebooks sm.auth_token
+        DBUtils.sync_updated_notebooks dm, notebooks
+        reply = ListNotebookReply.new
+        reply.notebooks = notebooks
+        @@issued_before = true
+        shell.reply self, reply
+      end
     end
   end
 
@@ -758,15 +775,26 @@ module EnClient
       @tag_guids = []
     end
 
-    def exec
-      return unless check_auth ListNoteReply
+    def exec_impl
+      check_auth
+      if dm.during_full_sync?
+        get_result_from_server
+      else
+        get_result_from_local_cache
+      end
+    end
+
+    private
+
+    def get_result_from_local_cache
+      LOG.debug "return notes from cache"
       notes = []
       dm.transaction do
         dm.open_note do |db|
           db.each_value do |value|
             n = Evernote::EDAM::Type::Note.new
             n.deserialize value
-            if @tag_guids == nil || (@tag_guids - n.tagGuids).empty?
+            if @tag_guids == nil || (n.tagGuids != nil && (@tag_guids - n.tagGuids).empty?)
               if @notebook_guid == nil || @notebook_guid == n.notebookGuid
                 notes << n
               end
@@ -779,187 +807,182 @@ module EnClient
       end
       reply = ListNoteReply.new
       reply.notes = notes
-      shell.reply reply
+      shell.reply self, reply
+    end
+
+    def get_result_from_server
+      LOG.debug "return notes from server"
+      server_task do
+        filter = Evernote::EDAM::NoteStore::NoteFilter.new
+        filter.order = Evernote::EDAM::Type::NoteSortOrder::UPDATED
+        filter.tagGuids = @tag_guids
+        filter.notebookGuid = @notebook_guid
+
+        notelist = sm.note_store.findNotes(sm.auth_token,
+                                           filter,
+                                           0,
+                                           Evernote::EDAM::Limits::EDAM_USER_NOTES_MAX)
+        DBUtils.sync_updated_notes dm, sm, tm, notelist.notes
+        reply = ListNoteReply.new
+        reply.notes = notelist.notes
+        shell.reply self, reply
+      end
     end
   end
 
 
   class ListTagCommand < Command
-    def exec
-      return unless check_auth ListTagReply
-      sm.auth_token # check authentication
-      tags = []
-      dm.transaction do
-        dm.open_tag do |db|
-          db.each_value do |value|
-            t = Evernote::EDAM::Type::Tag.new
-            t.deserialize value
-            tags << t
-          end
-        end
+    @@issued_before = false
+
+    def exec_impl
+      check_auth
+      if dm.during_full_sync? && !@@issued_before
+        get_result_from_server
+      else
+        get_result_from_local_cache
+      end
+    end
+
+    private
+
+    def get_result_from_local_cache
+      LOG.debug "return tags from cache"
+      tags = DBUtils.get_all_tags dm
+      tags.sort! do |a, b|
+        a.name <=> b.name
       end
       reply = ListTagReply.new
       reply.tags = tags
-      shell.reply reply
+      shell.reply self, reply
+    end
+
+    def get_result_from_server
+      server_task do
+        LOG.debug "return tags from server"
+        tags = sm.note_store.listTags sm.auth_token
+        DBUtils.sync_updated_tags dm, tags
+        reply = ListTagReply.new
+        reply.tags = tags
+        shell.reply self, reply
+      end
     end
   end
 
 
   class ListSearchCommand < Command
-    def exec
-      return unless check_auth ListSearchReply
-      sm.auth_token # check authentication
-      searches = []
-      dm.transaction do
-        dm.open_search do |db|
-          db.each_value do |value|
-            s = Evernote::EDAM::Type::SavedSearch.new
-            s.deserialize value
-            searches << s
-          end
-        end
+    def exec_impl
+      check_auth
+      if dm.during_full_sync? && !@@issued_before
+        get_result_from_server
+      else
+        get_result_from_local_cache
+      end
+    end
+
+    private
+
+    def get_result_from_local_cache
+      LOG.debug "return searches from cache"
+      searches = DBUtils.get_all_searches dm
+      searches.sort! do |a, b|
+        a.name <=> b.name
       end
       reply = ListSearchReply.new
       reply.searches = searches
-      shell.reply reply
+      shell.reply self, reply
+    end
+
+    def get_result_from_server
+      server_task do
+        LOG.debug "return searches from server"
+        searches = sm.note_store.listSearches sm.auth_token
+        DBUtils.sync_updated_searches dm, searches
+        reply = ListSearchReply.new
+        reply.searches = searches
+        shell.reply self, reply
+      end
     end
   end
 
 
   class Reply
-    attr_accessor :result_code, :message
+    attr_accessor :command_id
+  end
 
-    def initialize(result_code, message)
-      @result_code, @message = result_code, message
-    end
+
+  class ErrorReply < Reply
+    attr_accessor :result_code, :message
   end
 
 
   class AuthReply < Reply
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class ListNotebookReply < Reply
     attr_accessor :notebooks
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class ListNoteReply < Reply
     attr_accessor :notes
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class ListTagReply < Reply
     attr_accessor :tags
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class ListSearchReply < Reply
     attr_accessor :searches
-
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class SearchNoteReply < Reply
     attr_accessor :notes
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class GetNoteReply < Reply
     attr_accessor :note
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class GetContentReply < Reply
     attr_accessor :content
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class CreateNoteReply < Reply
     attr_accessor :note
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class UpdateNoteReply < Reply
     attr_accessor :note
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class DeleteNoteReply < Reply
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class CreateTagReply < Reply
     attr_accessor :tag
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class UpdateTagReply < Reply
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class CreateSearchReply < Reply
     attr_accessor :search
-
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
   class UpdateSearchReply < Reply
-    def initialize(result_code = ERROR_CODE_OK, message = nil)
-      super
-    end
   end
 
 
@@ -976,6 +999,7 @@ module EnClient
 
   class SyncTask < Task
     MAX_SYNCED_ENTRY = 100
+    #MAX_SYNCED_ENTRY = 1 for test
 
     def initialize(sm, dm, tm)
       @sm = sm
@@ -995,7 +1019,7 @@ module EnClient
       LOG.info "expiration     = #{@sm.expiration}"
 
       @sm.refresh_authentication sync_state.currentTime
-      last_sync, usn = get_last_sync_and_usn
+      last_sync, usn = DBUtils.get_last_sync_and_usn @dm
 
       LOG.info "[current state begin]"
       LOG.info "last_sync      = #{last_sync}"
@@ -1005,220 +1029,48 @@ module EnClient
       return if sync_state.updateCount == usn
 
       is_full_sync = false
+
       if last_sync < sync_state.fullSyncBefore
-        LOG.debug "full sync"
         @dm.transaction do
           @dm.clear_db
         end
+        @dm.set_during_full_sync true
+        LOG.debug "begin full sync"
+      end
+
+      if @dm.during_full_sync?
         is_full_sync = true
-      else
-        LOG.debug "diff sync"
-        is_full_sync = false
       end
 
       sync_chunk = note_store.getSyncChunk @sm.auth_token, usn, MAX_SYNCED_ENTRY, is_full_sync
-      LOG.debug "sync (#{usn}-#{sync_chunk.chunkHighUSN})"
+      LOG.debug "sync (#{usn}-#{sync_chunk.chunkHighUSN}) full_sync = #{is_full_sync}"
       sync_db sync_chunk
 
       if sync_chunk.chunkHighUSN < sync_chunk.updateCount
         @tm.put SyncTask.new(@sm, @dm, @tm)
+      else
+        @dm.set_during_full_sync false
+        LOG.debug "finish full sync"
       end
 
     rescue
       message = ErrorUtils.get_message $!
       LOG.warn message
+      LOG.warn $!.backtrace
     end
 
     private
 
     def sync_db(sync_chunk)
-      update_notebooks sync_chunk.notebooks if sync_chunk.notebooks
-      update_notes sync_chunk.notes if sync_chunk.notes
-      update_tags sync_chunk.tags if sync_chunk.tags
-      update_searches sync_chunk.searches if sync_chunk.searches
-      expunge_notebooks sync_chunk.expungedNotebooks if sync_chunk.expungedNotebooks
-      expunge_notes sync_chunk.expungedNotes if sync_chunk.expungedNotes
-      expunge_tags sync_chunk.expungedTags if sync_chunk.expungedTags
-      expunge_searches sync_chunk.expungedSearches if sync_chunk.expungedSearches
-      set_last_sync_and_usn sync_chunk.currentTime, sync_chunk.chunkHighUSN
-    end
-
-    def get_last_sync_and_usn
-      last_sync, usn = nil, nil
-      @dm.transaction do
-        @dm.open_sync do |db|
-          last_sync, usn = db[DBManager::DB_SYNC_LAST_SYNC_FIELD], db[DBManager::DB_SYNC_USN_FIELD] 
-        end
-      end
-
-      if last_sync
-        last_sync = last_sync.to_i
-      else
-        last_sync = 0
-      end
-      if usn
-        usn = usn.to_i
-      else
-        usn = 0
-      end
-
-      [last_sync, usn]
-    end
-
-    def set_last_sync_and_usn(last_sync, usn)
-      @dm.transaction do
-        @dm.open_sync do |db|
-          db[DBManager::DB_SYNC_LAST_SYNC_FIELD] = last_sync.to_s
-          db[DBManager::DB_SYNC_USN_FIELD] = usn.to_s
-        end
-      end
-    end
-
-    def update_notebooks(notebooks)
-      @dm.transaction do
-        @dm.open_notebook do |db|
-          notebooks.each do |new_notebook|
-            if db.has_key? new_notebook.guid
-              current_notebook = Evernote::EDAM::Type::Notebook.new
-              current_notebook.deserialize db[new_notebook.guid]
-              if current_notebook.updateSequenceNum < new_notebook.updateSequenceNum
-                db[new_notebook.guid] = new_notebook.serialize
-              end
-            else
-              db[new_notebook.guid] = new_notebook.serialize
-            end
-          end
-        end
-      end
-    end
-
-    def update_notes(notes)
-      @dm.transaction do
-        @dm.open_note do |db|
-          notes.each do |new_note|
-            if db.has_key? new_note.guid
-              current_note = Evernote::EDAM::Type::Note.new
-              current_note.deserialize db[new_note.guid]
-              if current_note.updateSequenceNum < new_note.updateSequenceNum
-                new_note.editMode = Utils.get_edit_mode new_note.attributes.sourceApplication
-                db[new_note.guid] = new_note.serialize
-                @tm.put DownloadContentTask.new(new_note.guid, @sm, @dm)
-              end
-            else
-              new_note.editMode = Utils.get_edit_mode new_note.attributes.sourceApplication
-              db[new_note.guid] = new_note.serialize
-              @tm.put DownloadContentTask.new(new_note.guid, @sm, @dm)
-            end
-          end
-        end
-      end
-    end
-
-    def update_tags(tags)
-      @dm.transaction do
-        @dm.open_tag do |db|
-          tags.each do |new_tag|
-            if db.has_key? new_tag.guid
-              current_tag = Evernote::EDAM::Type::Tag.new
-              current_tag.deserialize db[new_tag.guid]
-              if current_tag.updateSequenceNum < new_tag.updateSequenceNum
-                db[new_tag.guid] = new_tag.serialize
-              end
-            else
-              db[new_tag.guid] = new_tag.serialize
-            end
-          end
-        end
-      end
-    end
-
-    def update_searches(searches)
-      @dm.transaction do
-        @dm.open_search do |db|
-          searches.each do |new_search|
-            if db.has_key? new_search.guid
-              current_search = Evernote::EDAM::Type::SavedSearch.new
-              current_search.deserialize db[new_search.guid]
-              if current_search.updateSequenceNum < new_search.updateSequenceNum
-                db[new_search.guid] = new_search.serialize
-              end
-            else
-              db[new_search.guid] = new_search.serialize
-            end
-          end
-        end
-      end
-    end
-
-    def expunge_notebooks(guids)
-      @dm.transaction do
-        @dm.open_notebook do |db|
-          guids.each do |guid|
-            db.delete guid
-          end
-        end
-      end
-    end
-
-    def expunge_notes(guids)
-      @dm.transaction do
-        @dm.open_note do |db|
-          guids.each do |guid|
-            db.delete guid
-            @tm.put ExpungeContentTask.new(guid, @dm)
-          end
-        end
-      end
-    end
-
-    def expunge_tags(guids)
-      @dm.transaction do
-        @dm.open_tag do |db|
-          guids.each do |guid|
-            db.delete guid
-          end
-        end
-      end
-    end
-
-    def expunge_searches(guids)
-      @dm.transaction do
-        @dm.open_search do |db|
-          guids.each do |guid|
-            db.delete guid
-          end
-        end
-      end
-    end
-  end
-
-
-  class DownloadContentTask < Task
-    def initialize(guid, sm, dm)
-      @guid, @sm, @dm = guid, sm, dm
-    end
-
-    def exec
-      content = @sm.note_store.getNoteContent @sm.auth_token, @guid
-      @dm.transaction do
-        @dm.set_note_content @guid, content
-      end
-    rescue
-      message = ErrorUtils.get_message $!
-      LOG.warn message
-    end
-  end
-
-
-  class ExpungeContentTask < Task
-    def initialize(guid, dm)
-      @guid, @dm = guid, dm
-    end
-
-    def exec
-      @dm.transaction do
-        @dm.remove_note_content @guid
-      end
+      DBUtils.sync_updated_notebooks @dm, sync_chunk.notebooks if sync_chunk.notebooks
+      DBUtils.sync_updated_notes @dm, @sm, @tm, sync_chunk.notes if sync_chunk.notes
+      DBUtils.sync_updated_tags @dm, sync_chunk.tags if sync_chunk.tags
+      DBUtils.sync_updated_searches @dm, sync_chunk.searches if sync_chunk.searches
+      DBUtils.sync_expunged_notebooks @dm, sync_chunk.expungedNotebooks if sync_chunk.expungedNotebooks
+      DBUtils.sync_expunged_notes @dm, sync_chunk.expungedNotes, @tm if sync_chunk.expungedNotes
+      DBUtils.sync_expunged_tags @dm, sync_chunk.expungedTags if sync_chunk.expungedTags
+      DBUtils.sync_expunged_searches @dm, sync_chunk.expungedSearches if sync_chunk.expungedSearches
+      DBUtils.set_last_sync_and_usn @dm, sync_chunk.currentTime, sync_chunk.chunkHighUSN
     end
   end
 
@@ -1346,6 +1198,7 @@ module EnClient
     DB_SYNC_LAST_SYNC_FIELD = 'last_sync'
     DB_SYNC_USN_FIELD       = 'usn'
 
+
     def initialize
       unless FileTest.directory? ENMODE_SYS_DIR
         FileUtils.mkdir ENMODE_SYS_DIR
@@ -1358,6 +1211,7 @@ module EnClient
       @lock_file = open DB_LOCK, 'w'
       @mutex = Mutex.new
       @in_transaction = false
+      @is_during_full_sync = false
     end
 
     def transaction
@@ -1366,8 +1220,8 @@ module EnClient
       @in_transaction = true
       yield
     ensure
-      @mutex.unlock
       @in_transaction = false
+      @mutex.unlock
       @lock_file.flock File::LOCK_UN
     end
 
@@ -1433,16 +1287,283 @@ module EnClient
       LOG.info "expunge content at #{file_path}"
     end
 
+    def during_full_sync?
+      result = nil
+      @mutex.synchronize do
+        result = @is_during_full_sync
+      end
+      result
+    end
+
+    def set_during_full_sync(state)
+      LOG.debug "during full sync: #{state}"
+      @mutex.synchronize do
+        @is_during_full_sync = state
+      end
+    end
+
+  end
+
+
+  class DBUtils
+    def self.get_last_sync_and_usn(dm)
+      last_sync, usn = nil, nil
+      dm.transaction do
+        dm.open_sync do |db|
+          last_sync, usn = db[DBManager::DB_SYNC_LAST_SYNC_FIELD], db[DBManager::DB_SYNC_USN_FIELD]
+        end
+      end
+
+      if last_sync
+        last_sync = last_sync.to_i
+      else
+        last_sync = 0
+      end
+      if usn
+        usn = usn.to_i
+      else
+        usn = 0
+      end
+
+      [last_sync, usn]
+    end
+
+    def self.set_last_sync_and_usn(dm, last_sync, usn)
+      dm.transaction do
+        dm.open_sync do |db|
+          db[DBManager::DB_SYNC_LAST_SYNC_FIELD] = last_sync.to_s
+          db[DBManager::DB_SYNC_USN_FIELD] = usn.to_s
+        end
+      end
+    end
+
+    def self.get_all_notebooks(dm)
+      notebooks = []
+      dm.transaction do
+        dm.open_notebook do |db|
+          db.each_value do |value|
+            nb = Evernote::EDAM::Type::Notebook.new
+            nb.deserialize value
+            notebooks << nb
+          end
+        end
+      end
+      notebooks
+    end
+
+    def self.get_note(dm, guid)
+      note = Evernote::EDAM::Type::Note.new
+      dm.transaction do
+        dm.open_note do |db|
+          if db.has_key? guid
+            note.deserialize db[guid]
+          else
+            raise NotFoundException.new("Note guid #{guid} is not found")
+          end
+        end
+      end
+      note
+    end
+
+    def self.set_note_and_content(dm, note)
+      dm.transaction do
+        dm.open_note do |db|
+          db[note.guid] = note.serialize
+        end
+        dm.set_note_content note.guid, note.content if note.content
+      end
+    end
+
+    def self.get_content(dm, guid)
+      dm.transaction do
+        content = dm.get_note_content guid
+      end
+    end
+
+    def self.get_all_tags(dm)
+      tags = []
+      dm.transaction do
+        dm.open_tag do |db|
+          db.each_value do |value|
+            t = Evernote::EDAM::Type::Tag.new
+            t.deserialize value
+            tags << t
+          end
+        end
+      end
+      tags
+    end
+
+    def self.exist_tag_in_cache?(dm, guid)
+      dm.transaction do
+        dm.open_tag do |db|
+          if db.has_key? guid
+            return true
+          end
+        end
+      end
+      return false
+    end
+
+    def self.set_tag(dm, tag)
+      dm.transaction do
+        dm.open_tag do |db|
+          db[tag.guid] = tag.serialize
+        end
+      end
+    end
+
+    def self.get_all_searches(dm)
+      searches = []
+      dm.transaction do
+        dm.open_search do |db|
+          db.each_value do |value|
+            s = Evernote::EDAM::Type::SavedSearch.new
+            s.deserialize value
+            searches << s
+          end
+        end
+      end
+      searches
+    end
+
+    def self.set_search(dm, search)
+      dm.transaction do
+        dm.open_search do |db|
+          db[search.guid] = search.serialize
+        end
+      end
+    end
+
+    def self.sync_updated_notebooks(dm, notebooks)
+      dm.transaction do
+        dm.open_notebook do |db|
+          notebooks.each do |new_notebook|
+            if db.has_key? new_notebook.guid
+              current_notebook = Evernote::EDAM::Type::Notebook.new
+              current_notebook.deserialize db[new_notebook.guid]
+              if current_notebook.updateSequenceNum < new_notebook.updateSequenceNum
+                db[new_notebook.guid] = new_notebook.serialize
+              end
+            else
+              db[new_notebook.guid] = new_notebook.serialize
+            end
+          end
+        end
+      end
+    end
+
+    def self.sync_updated_notes(dm, sm, tm, notes)
+      dm.transaction do
+        dm.open_note do |db|
+          notes.each do |new_note|
+            # this method set editMode.
+            new_note.editMode = Formatter.get_edit_mode new_note.attributes.sourceApplication
+            if db.has_key? new_note.guid
+              current_note = Evernote::EDAM::Type::Note.new
+              current_note.deserialize db[new_note.guid]
+              if current_note.updateSequenceNum < new_note.updateSequenceNum
+                dm.remove_note_content new_note.guid # remove content cache if updated
+                db[new_note.guid] = new_note.serialize # update note info
+              end
+            else
+              db[new_note.guid] = new_note.serialize
+            end
+          end
+        end
+      end
+    end
+
+    def self.sync_updated_tags(dm, tags)
+      dm.transaction do
+        dm.open_tag do |db|
+          tags.each do |new_tag|
+            if db.has_key? new_tag.guid
+              current_tag = Evernote::EDAM::Type::Tag.new
+              current_tag.deserialize db[new_tag.guid]
+              if current_tag.updateSequenceNum < new_tag.updateSequenceNum
+                db[new_tag.guid] = new_tag.serialize
+              end
+            else
+              db[new_tag.guid] = new_tag.serialize
+            end
+          end
+        end
+      end
+    end
+
+    def self.sync_updated_searches(dm, searches)
+      dm.transaction do
+        dm.open_search do |db|
+          searches.each do |new_search|
+            if db.has_key? new_search.guid
+              current_search = Evernote::EDAM::Type::SavedSearch.new
+              current_search.deserialize db[new_search.guid]
+              if current_search.updateSequenceNum < new_search.updateSequenceNum
+                db[new_search.guid] = new_search.serialize
+              end
+            else
+              db[new_search.guid] = new_search.serialize
+            end
+          end
+        end
+      end
+    end
+
+    def self.sync_expunged_notebooks(dm, guids)
+      dm.transaction do
+        dm.open_notebook do |db|
+          guids.each do |guid|
+            db.delete guid
+          end
+        end
+      end
+    end
+
+    def self.sync_expunged_notes(dm, guids, tm = nil)
+      dm.transaction do
+        dm.open_note do |db|
+          guids.each do |guid|
+            dm.remove_note_content guid # remove content cache if updated
+            db.delete guid
+          end
+        end
+      end
+    end
+
+    def self.sync_expunged_tags(dm, guids)
+      dm.transaction do
+        dm.open_tag do |db|
+          guids.each do |guid|
+            db.delete guid
+          end
+        end
+      end
+    end
+
+    def self.sync_expunged_searches(dm, guids)
+      dm.transaction do
+        dm.open_search do |db|
+          guids.each do |guid|
+            db.delete guid
+          end
+        end
+      end
+    end
   end
 
 
   class TaskManager
     def initialize
-      @task_queue = Queue.new
+      @task_queue = TaskQueue.new
     end
 
-    def put(task)
-      @task_queue.push task
+    def put(task, high_prio = false)
+      if high_prio
+        @task_queue.push_to_front task
+      else
+        @task_queue.push task
+      end
     end
 
     def run
@@ -1462,11 +1583,7 @@ module EnClient
   end
 
 
-  class Utils
-    NOTE_DEFAULT_HEADER = %|<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd"><en-note>|
-
-    NOTE_DEFAULT_FOOTER = %|</en-note>|
-
+  class Timer
     def self.repeat_every(interval)
       while true
         spent_time = time_block { yield }
@@ -1474,20 +1591,29 @@ module EnClient
       end
     end
 
-    def self.to_xhtml(content)
-      content = CGI.escapeHTML content
-      content.gsub! %r| |, %|&nbsp;|
-        content.gsub! %r|\n|, %|<br clear="none"/>|
-        content = NOTE_DEFAULT_HEADER + content + NOTE_DEFAULT_FOOTER
-    end
+    private
 
+    def self.time_block
+      start_time = Time.now
+      yield
+      Time.now - start_time
+    end
+  end
+
+
+  class Formatter
     def self.get_edit_mode(src_app)
-      if src_app =~ /\Aemacs-enclient (\{.*\})\z/
-        attr = eval $1
-        attr[:editmode]
-      else
-        "XHTML"
+      result = "XHTML"
+      if src_app != nil
+        src_app = src_app.strip
+        if src_app =~ /\Aemacs-enclient\s*\{.*:editmode\s*=>\s*"(.*)"[^\}]*\}\z/
+          result = $1
+          unless result == "TEXT" || result == "XHTML"
+            result = "TEXT"
+          end
+        end
       end
+      result
     end
 
     def self.encode_base64(str)
@@ -1496,8 +1622,9 @@ module EnClient
     end
 
     def self.encode_base64_list(str_list)
-      b64str = Base64.encode64 str
-      b64str.delete "\n\r"
+      str_list.map do |elem|
+        encode_base64 elem
+      end
     end
 
     def self.decode_base64(b64str)
@@ -1533,7 +1660,7 @@ module EnClient
         obj.to_sexp
       else
         str = "("
-        class_name = Utils.remove_package_names obj.class.name
+        class_name = Formatter.remove_package_names obj.class.name
         str += "(class . #{class_name})"
         obj.instance_variables.each do |varsym|
           varname = varsym.to_s[1 .. -1] # remove "@"
@@ -1551,17 +1678,18 @@ module EnClient
       full_class_name.split("::")[-1]
     end
 
-    private
-
-    def self.time_block
-      start_time = Time.now
-      yield
-      Time.now - start_time
+    IS_FORCE_ENCODING_SUPPORTED = "".respond_to? :force_encoding
+    def self.to_ascii(*rest)
+      if IS_FORCE_ENCODING_SUPPORTED
+        rest.each do |elem|
+          elem.force_encoding Encoding::ASCII_8BIT if elem
+        end
+      end
     end
   end
 
 
-  class ErrorUtils
+  class ErrorUtils # from here,  rename the appropriate name.
     def self.set_reply_error(ex, reply)
       case ex
       when Evernote::EDAM::Error::EDAMUserException
@@ -1582,6 +1710,7 @@ module EnClient
         reply.result_code = ERROR_CODE_UNEXPECTED
         reply.message = ex.message
       end
+      reply.message = Formatter.sexp_string_escape reply.message
     end
 
     def self.get_message(ex)
@@ -1602,7 +1731,7 @@ module EnClient
 
 
   class Shell
-    AUTO_SYNC_INTERVAL = 20
+    AUTO_SYNC_INTERVAL = 60
 
     def run
       sm = SessionManager.new
@@ -1611,15 +1740,21 @@ module EnClient
       tm.run
 
       Thread.start do
-        Utils.repeat_every AUTO_SYNC_INTERVAL do
+        Timer.repeat_every AUTO_SYNC_INTERVAL do
           tm.put SyncTask.new(sm, dm, tm)
         end
       end
 
       begin
+        #if $stdin.respond_to? :set_encoding
+        #  LOG.debug "get stdin encoding #{$stdin.external_encoding}, #{$stdin.internal_encoding}"
+        #  $stdin.set_encoding "UTF-8", "UTF-8"
+        #  LOG.debug "get stdin encoding #{$stdin.external_encoding}, #{$stdin.internal_encoding}"
+        #end
         while true
           begin
             line = $stdin.gets "\000"
+            LOG.debug line
             hash = eval line
             command = Command.create_from_hash hash
             command.sm = sm
@@ -1638,8 +1773,10 @@ module EnClient
       end
     end
 
-    def reply(reply)
-      $stdout.puts Utils.obj_to_sexp(reply)
+    def reply(command, reply)
+      reply.command_id = command.command_id
+      $stdout.puts Formatter.obj_to_sexp(reply)
+      $stdout.flush
     end
 
   end

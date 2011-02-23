@@ -482,7 +482,8 @@
       (if evernote-note-modified-name ; name
           evernote-note-modified-name
         nil)
-      (if evernote-note-is-modified-tag-names ; tags
+      evernote-note-is-modified-tag-names ; is-tag-updated
+      (if evernote-note-is-modified-tag-names ; tag-names
           evernote-note-modified-tag-names
         nil)
       (if evernote-note-modified-edit-mode ; edit-mode
@@ -882,11 +883,11 @@
       buf)))
 
 
-(defun enh-base-update-note-common (inbuf guid &optional name tag-names edit-mode)
+(defun enh-base-update-note-common (inbuf guid &optional name is-tag-updated tag-names edit-mode)
   "Common procedure of opening a note"
   (let ((attr (enh-command-get-note-attr guid)))
     (setq attr
-          (enh-command-update-note inbuf guid name tag-names edit-mode))
+          (enh-command-update-note inbuf guid name is-tag-updated tag-names edit-mode))
     (enh-update-note-and-new-tag-attrs attr)))
 
 
@@ -1205,7 +1206,7 @@
   (let ((guid-children-hash (make-hash-table :test #'equal)))
     (maphash
      (lambda (guid attr)
-       (let* ((parent (enutil-aget 'parent attr))
+       (let* ((parent (enutil-aget 'parentGuid attr))
               (children (gethash parent guid-children-hash)))
          (if children
              (puthash parent (cons guid children) guid-children-hash)
@@ -1400,12 +1401,13 @@
 
 (defvar enh-command-last-result-code enh-command-error-ok)
 (defvar enh-command-last-error-message nil)
+(defvar enh-command-next-command-id 0)
 
 
 (defun enh-command-login (user passwd)
   "Issue login command"
   (enh-command-issue
-   (format "{:class => %s, :user => %s, :passwd => %s}"
+   (format ":class => %s, :user => %s, :passwd => %s"
            (enutil-to-ruby-string "AuthCommand")
            (enutil-to-ruby-string user)
            (enutil-to-ruby-string passwd))))
@@ -1414,7 +1416,7 @@
 (defun enh-command-get-notebook-attrs ()
   "Issue listnotebooks command"
   (let ((reply (enh-command-issue
-                (format "{:class => %s}"
+                (format ":class => %s"
                         (enutil-to-ruby-string "ListNotebookCommand")))))
     (enutil-aget 'notebooks reply)))
 
@@ -1422,7 +1424,7 @@
 (defun enh-command-get-tag-attrs ()
   "Issue listtags command"
   (let ((reply (enh-command-issue
-                (format "{:class => %s}"
+                (format ":class => %s"
                         (enutil-to-ruby-string "ListTagCommand")))))
     (enutil-aget 'tags reply)))
 
@@ -1430,7 +1432,7 @@
 (defun enh-command-get-note-attr (guid)
   "Issue getnote command from the tag name list."
   (let ((reply (enh-command-issue
-                (format "{:class => %s, :guid => %s}"
+                (format ":class => %s, :guid => %s"
                         (enutil-to-ruby-string "GetNoteCommand")
                         (enutil-to-ruby-string guid)))))
     (enutil-aget 'note reply)))
@@ -1439,7 +1441,7 @@
 (defun enh-command-get-note-attrs-from-notebook-guid (notebook-guid)
   "Issue listnotes command from the notebook guid."
   (let ((reply (enh-command-issue
-                (format "{:class => %s, :notebook_guid => %s}"
+                (format ":class => %s, :notebook_guid => %s"
                         (enutil-to-ruby-string "ListNoteCommand")
                         (enutil-to-ruby-string notebook-guid)))))
     (enutil-aget 'notes reply)))
@@ -1448,16 +1450,16 @@
 (defun enh-command-get-note-attrs-from-tag-guids (tag-guids)
   "Issue listnotes command from the tag guid list."
   (let ((reply (enh-command-issue
-                (format "{:class => %s, :tag_guids => %s}"
+                (format ":class => %s, :tag_guids => %s"
                         (enutil-to-ruby-string "ListNoteCommand")
-                        (enutil-to-ruby-string-list tag-guids)))))
+                        (enutil-to-ruby-string-list tag-guids nil)))))
     (enutil-aget 'notes reply)))
 
 
 (defun enh-command-get-note-attrs-from-query (query)
   "Issue listnotes command from the query."
   (let ((reply (enh-command-issue
-                (format "{:class => %s, :query => %s}"
+                (format ":class => %s, :query => %s"
                         (enutil-to-ruby-string "SearchNoteCommand")
                         (enutil-to-ruby-string query)))))
     (enutil-aget 'notes reply)))
@@ -1466,7 +1468,7 @@
 (defun enh-command-get-note-content (guid edit-mode)
   "Issue getnotecontent command specified by the guid and the edit mode."
   (let ((reply (enh-command-issue
-                (format "{:class => %s, :guid => %s, :edit_mode => %s}"
+                (format ":class => %s, :guid => %s, :edit_mode => %s"
                         (enutil-to-ruby-string "GetContentCommand")
                         (enutil-to-ruby-string guid)
                         (enutil-to-ruby-string edit-mode)))))
@@ -1476,23 +1478,23 @@
 (defun enh-command-create-note (inbuf name tag-names edit-mode)
   "Issue createnote command specified by the guid, tags and the edit-mode."
   (let ((reply (enh-command-issue
-                (format "{:class => %s, :title => %s, :tag_names => %s, :edit_mode => %s, :content => %s}"
+                (format ":class => %s, :title => %s, :tag_names => %s, :edit_mode => %s, :content => %s"
                         (enutil-to-ruby-string "CreateNoteCommand")
                         (enutil-to-ruby-string name)
-                        (enutil-to-ruby-string-list tag-names)
+                        (enutil-to-ruby-string-list tag-names nil)
                         (enutil-to-ruby-string edit-mode)
                         (enutil-to-ruby-string (enutil-buffer-string inbuf))))))
     (enutil-aget 'note reply)))
 
 
-(defun enh-command-update-note (inbuf guid name tag-names edit-mode)
+(defun enh-command-update-note (inbuf guid name is-tag-updated tag-names edit-mode)
   "Issue updatenote command specified by the guid and the parameters for updating."
   (let ((reply (enh-command-issue
-                (format "{:class => %s, :guid => %s, :title => %s, :tag_names => %s, :edit_mode => %s, :content => %s}"
+                (format ":class => %s, :guid => %s, :title => %s, :tag_names => %s, :edit_mode => %s, :content => %s"
                         (enutil-to-ruby-string "UpdateNoteCommand")
                         (enutil-to-ruby-string guid)
                         (enutil-to-ruby-string name)
-                        (enutil-to-ruby-string-list tag-names)
+                        (enutil-to-ruby-string-list tag-names is-tag-updated)
                         (enutil-to-ruby-string edit-mode)
                         (enutil-to-ruby-string (enutil-buffer-string inbuf))))))
     (enutil-aget 'note reply)))
@@ -1501,7 +1503,7 @@
 (defun enh-command-delete-note (guid)
   "Issue deletenote command specified by the guid, tags and the edit mode."
   (enh-command-issue
-     (format "{:class => %s, :guid => %s}"
+     (format ":class => %s, :guid => %s"
              (enutil-to-ruby-string "DeleteNoteCommand")
              (enutil-to-ruby-string guid))))
 
@@ -1509,7 +1511,7 @@
 (defun enh-command-get-search-attrs ()
   "Issue listsearch command"
   (let ((reply (enh-command-issue
-                (format "{:class => %s}"
+                (format ":class => %s"
                         (enutil-to-ruby-string "ListSearchCommand")))))
     (enutil-aget 'searches reply)))
 
@@ -1517,7 +1519,7 @@
 (defun enh-command-create-search (name query)
   "Issue createsearch command"
   (enh-command-issue
-     (format "{:class => %s, :name => %s, :query => %s}"
+     (format ":class => %s, :name => %s, :query => %s"
              (enutil-to-ruby-string "CreateSearchCommand")
              (enutil-to-ruby-string name)
              (enutil-to-ruby-string query))))
@@ -1526,7 +1528,7 @@
 (defun enh-command-update-search (guid name query)
   "Issue updatesearch command"
   (enh-command-issue
-     (format "{:class => %s, :guid => %s, :name => %s, :query => %s}"
+     (format ":class => %s, :guid => %s, :name => %s, :query => %s"
              (enutil-to-ruby-string "UpdateSearchCommand")
              (enutil-to-ruby-string guid)
              (enutil-to-ruby-string name)
@@ -1542,17 +1544,25 @@
     (save-excursion
       (set-buffer buffer)
       (delete-region (point-min) (point-max))
-      (process-send-string proc command)
+      (setq enh-command-next-command-id
+            (+ 1 enh-command-next-command-id))
+      (process-send-string proc
+                           (format "{%s, :command_id => %d}"
+                                   command enh-command-next-command-id))
       (process-send-string proc "\x00\n")
-      (while (not reply)
-          (accept-process-output proc)
-          (setq reply (enutil-get-first-sexp-in-buffer))))
+      (while (or (not reply)
+                 (enutil-neq (enutil-aget 'command_id reply)
+                             enh-command-next-command-id))
+        (accept-process-output proc)
+        (setq reply (enutil-get-first-sexp-in-buffer))))
     (message "")
-    (setq enh-command-last-result-code (enutil-aget 'result_code reply))
-    (setq enh-command-last-error-message (enutil-aget 'message reply))
-    (unless (eq enh-command-last-result-code enh-command-error-ok)
-      (throw 'error enh-command-last-result-code))
-    reply))
+    (if (eq (enutil-aget 'class reply) 'ErrorReply)
+        (progn
+          (setq enh-command-last-result-code (enutil-aget 'result_code reply))
+          (setq enh-command-last-error-message (enutil-aget 'message reply))
+          (throw 'error enh-command-last-result-code))
+      (setq enh-command-last-result-code enh-command-error-ok)
+      reply)))
 
 
 (defun enh-command-setup-process ()
@@ -1561,8 +1571,7 @@
               (not (eq (process-status proc) 'run)))
       (setq proc (start-process enh-command-process-name
                                 enh-command-output-buffer-name
-                                ; TODO: "ruby" "-S" "enclient.rb"
-                                "ruby" "/home/kawakami/Work/evernote-mode/branches/0_30/ruby/bin/enclient.rb"))
+                                "ruby" "-S" "enclient.rb"))
       (set-process-coding-system proc 'utf-8 'utf-8)
       (set-process-query-on-exit-flag proc nil))))
 
@@ -1772,9 +1781,15 @@
 
 
 (defun enh-read-edit-mode (default)
-  (completing-read "Edit mode (type \"TEXT\" or \"XHTML\"):"
-                   '(("TEXT") ("XHTML"))
-                   nil t default))
+  (let ((edit-mode
+         (completing-read "Edit mode (type \"TEXT\" or \"XHTML\"):"
+                          '(("TEXT") ("XHTML"))
+                          nil
+                          t
+                          default)))
+    (if (and edit-mode (not (string= edit-mode "")))
+        edit-mode
+      default)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1913,13 +1928,15 @@
 ;fea %{fea}"))
 
 
-(defun enutil-to-ruby-string-list (str-list)
+(defun enutil-to-ruby-string-list (str-list return-empty-array)
   (if str-list
       (concat
        "["
        (mapconcat #'enutil-to-ruby-string str-list ",")
        "]")
-    "nil"))
+    (if return-empty-array
+        "[]"
+      "nil")))
 
 
 (defun enutil-buffer-string (buf)
