@@ -1,1 +1,0 @@
-This page has moved to <a href="http://emacs-evernote-mode.googlecode.com/svn/branches/0_21/doc/readme_en.html">here</a>.
