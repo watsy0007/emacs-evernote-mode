@@ -9,5 +9,5 @@
 (In Japanese)
 
   * Anything から Evernote ノートを検索する為の機能を追加しました (anything-c-source-evernote-title)
-     詳細は <a href="http://emacs-evernote-mode.googlecode.com/svn/branches/0_33/doc/readme_ja.html">Readme: Collaboration with Anythin</a> を参照して下さい。
+     詳細は <a href="http://emacs-evernote-mode.googlecode.com/svn/branches/0_33/doc/readme_ja.html">Readme: Collaboration with Anything</a> を参照して下さい。
   * メニューバー上にメニューが表示されるようにしました
