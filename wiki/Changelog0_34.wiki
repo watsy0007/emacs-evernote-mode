@@ -8,6 +8,6 @@
 
 (In Japanese)
 
-  * ユーザ名とパスワードキャッシュをサポートしました
+  * ユーザ名とパスワードをキャッシュする機能をサポートしました
      詳細は <a href="http://emacs-evernote-mode.googlecode.com/svn/branches/0_34/doc/readme_ja.html">Readme: Variable: evernote-username and Variable: evernote-password-cache</a>
   * exec-path, PATH が正しく設定されていない場合や、gdbm がインストールされていない場合のエラーメッセージを分かりやすくしました。 (for issue 7, issue 8)
